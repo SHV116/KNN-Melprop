@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fix the stalled diffuser: a design game</title>
+<meta name="description" content="Design an inlet diffuser step by step, run the test and see how it scores against the Ansys Fluent result for today's part.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Saira+Semi+Condensed:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #EDEFF1;
+  --card: #FFFFFF;
+  --ink: #1E2329;
+  --ink2: #4B535C;
+  --ink3: #6E7681;
+  --rule: #D8DCE0;
+  --rule2: #B9C0C7;
+  --band: #E4E8EC;
+  --problem: #C2410C;
+  --fix: #1F5F99;
+  --fix-wash: #E9F0F7;
+  --mark: #A2AAB3;
+  --ok: #2E7D4F;
+  --check: #8A6D00;
+  --todo: #6B7480;
+  --ui: "Saira Semi Condensed", "Arial Narrow", Arial, sans-serif;
+  --serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--ui); font-size: 16px; line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+}
+:focus-visible { outline: 2px solid var(--fix); outline-offset: 2px; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 26px 28px 56px; }
+p { margin: 0 0 10px; }
+svg text { font-family: var(--ui); }
+
+/* top bar */
+.topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px 20px; flex-wrap: wrap; margin-bottom: 26px; }
+.project { color: var(--ink2); font-size: 15px; }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip { display: inline-flex; align-items: center; gap: 6px; background: var(--card); border: 1px solid var(--rule2); border-radius: 999px; padding: 2px 11px 2px 8px; font-size: 14px; color: var(--ink2); }
+.chip svg { flex: none; }
+
+/* hero */
+.hero { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 30px; align-items: start; }
+h1 { font-family: var(--serif); font-weight: 600; font-size: 38px; line-height: 1.12; letter-spacing: -0.012em; margin: 0 0 14px; max-width: 20ch; }
+.sub { font-family: var(--serif); font-size: 18px; line-height: 1.5; color: var(--ink2); margin: 0 0 24px; max-width: 46ch; }
+.kpis { display: grid; gap: 14px; }
+.kpi-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.kpi-name { color: var(--ink2); }
+.kpi-val { font-weight: 600; font-size: 20px; }
+.kpi svg { display: block; width: 100%; height: 34px; }
+
+.card { background: var(--card); border: 1px solid var(--rule); border-radius: 6px; padding: 18px 20px; }
+.fig { position: relative; }
+.fig img { display: block; width: 100%; height: auto; border-radius: 3px; cursor: zoom-in; }
+.callout {
+  position: absolute; transform: translate(-50%, -50%);
+  width: 30px; height: 30px; border-radius: 50%;
+  background: var(--ink); color: #fff; border: 2px solid #fff;
+  display: grid; place-items: center; font-weight: 600; font-size: 15px; box-shadow: 0 1px 3px rgba(30, 35, 41, 0.35);
+}
+.steps { list-style: none; margin: 14px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.steps li { display: grid; grid-template-columns: 26px 1fr; gap: 8px; align-items: start; }
+.steps .n { width: 24px; height: 24px; border-radius: 50%; background: var(--ink); color: #fff; display: grid; place-items: center; font-weight: 600; font-size: 13px; margin-top: 1px; }
+.steps strong { display: block; font-weight: 600; }
+.steps span { color: var(--ink2); font-size: 15px; }
+.fig-cap { color: var(--ink3); font-size: 14px; margin: 10px 0 0; }
+
+/* sections */
+section { margin-top: 48px; }
+h2 { font-weight: 600; font-size: 26px; line-height: 1.2; margin: 0 0 6px; }
+h3 { font-weight: 600; font-size: 18px; margin: 0 0 8px; }
+.lead { font-family: var(--serif); font-size: 17px; color: var(--ink2); margin: 0 0 18px; max-width: 72ch; }
+
+/* why */
+.why { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.why .big { font-weight: 600; font-size: 30px; line-height: 1.1; margin: 2px 0 6px; }
+.why p { font-family: var(--serif); color: var(--ink2); font-size: 16px; margin: 0; }
+
+
+/* evidence */
+.gallery { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.shot { margin: 0; }
+.shot button { display: block; padding: 0; border: 1px solid var(--rule); border-radius: 4px; background: #fff; cursor: zoom-in; width: 100%; }
+.shot img { display: block; width: 100%; height: auto; border-radius: 4px; }
+.shot figcaption { margin-top: 8px; }
+.shot figcaption strong { display: block; font-weight: 600; }
+.shot figcaption span { font-family: var(--serif); color: var(--ink2); font-size: 15.5px; }
+
+/* trust */
+.trust { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 18px; align-items: start; }
+.checks { list-style: none; margin: 0; padding: 0; }
+.checks li { display: grid; grid-template-columns: 26px 1fr auto; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--rule); align-items: start; }
+.checks li:last-child { border-bottom: 0; }
+.checks .what { font-weight: 500; }
+.checks .why { display: block; color: var(--ink2); font-family: var(--serif); font-size: 15px; font-weight: 400; }
+.checks .state { font-size: 14px; color: var(--ink2); white-space: nowrap; }
+
+/* setup and geometry */
+.specs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+
+/* next */
+.next { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.next li { background: var(--card); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 16px 14px; }
+.next .num { font-weight: 600; font-size: 28px; line-height: 1; color: var(--ink3); }
+.next strong { display: block; font-weight: 600; margin: 8px 0 4px; }
+.next span { font-family: var(--serif); color: var(--ink2); font-size: 15.5px; }
+
+footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule2); color: var(--ink3); font-size: 14px; display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+footer ul { margin: 4px 0 0; padding-left: 18px; }
+
+
+@media (max-width: 980px) {
+  .hero, .trust { grid-template-columns: 1fr; }
+  .why { grid-template-columns: 1fr; }
+  .next { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .wrap { padding: 18px 16px 40px; }
+  h1 { font-size: 30px; }
+  .steps, .gallery, .specs, .next { grid-template-columns: 1fr; }
+  footer { grid-template-columns: 1fr; }
+  .callout { width: 24px; height: 24px; font-size: 13px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* design options: radio buttons switch the drawing without JavaScript */
+.chart svg, .drawing svg { display: block; width: 100%; height: auto; }
+.opt-input { position: absolute; opacity: 0; pointer-events: none; }
+.opt-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 12px; }
+.opt-list label {
+  cursor: pointer; border: 1px solid var(--rule2); border-radius: 999px; background: var(--card);
+  padding: 5px 14px; font-size: 15px; color: var(--ink2);
+}
+.opt-list label:hover { border-color: var(--ink3); color: var(--ink); }
+.opt-panel { display: none; }
+.opt-panel .detail-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px 28px; align-items: start; margin-top: 12px; }
+.opt-panel h3 { font-size: 21px; margin-bottom: 2px; }
+.opt-panel .tag { display: inline-block; font-size: 13px; color: var(--ink2); border: 1px solid var(--rule2); border-radius: 999px; padding: 0 9px; }
+.opt-panel p { font-family: var(--serif); color: var(--ink2); }
+.opt-panel p strong { font-family: var(--ui); color: var(--ink); font-weight: 600; }
+table.kv { width: 100%; border-collapse: collapse; margin: 0; }
+table.kv th, table.kv td { text-align: left; padding: 5px 0; border-bottom: 1px solid var(--rule); vertical-align: baseline; }
+table.kv th { font-weight: 400; color: var(--ink2); width: 46%; padding-right: 12px; }
+table.kv td { font-weight: 500; }
+table.kv tr:last-child th, table.kv tr:last-child td { border-bottom: 0; }
+table.data { width: 100%; border-collapse: collapse; font-size: 15px; margin-top: 14px; }
+table.data th, table.data td { padding: 6px 8px; border-bottom: 1px solid var(--rule); text-align: right; white-space: nowrap; }
+table.data th:first-child, table.data td:first-child { text-align: left; padding-left: 0; white-space: normal; }
+table.data thead th { color: var(--ink2); font-weight: 500; border-bottom: 1px solid var(--rule2); }
+.table-scroll { overflow-x: auto; }
+.muted { color: var(--ink3); }
+
+/* evidence: select an image to enlarge it, with CSS :target */
+.shot a.thumb { display: block; border: 1px solid var(--rule); border-radius: 4px; background: #fff; }
+.shot a.thumb img { display: block; width: 100%; height: auto; border-radius: 4px; }
+.lightbox { display: none; position: fixed; inset: 0; z-index: 10; background: rgba(30, 35, 41, 0.78); padding: 4vh 3vw; align-items: center; justify-content: center; }
+.lightbox:target { display: flex; }
+.lightbox figure { margin: 0; background: var(--card); border-radius: 6px; padding: 14px; max-width: 1400px; max-height: 92vh; overflow: auto; }
+.lightbox img { display: block; max-width: 100%; max-height: 76vh; height: auto; margin: 0 auto; }
+.lightbox figcaption { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; margin-top: 10px; font-family: var(--serif); color: var(--ink2); }
+.lightbox .close { font-family: var(--ui); font-weight: 500; background: var(--ink); color: #fff; border-radius: 4px; padding: 6px 14px; text-decoration: none; flex: none; }
+.fig a { display: block; }
+
+/* how the numbers are computed */
+.calc td:nth-child(2) { color: var(--ink2); }
+@media (max-width: 760px) { .opt-panel .detail-grid { grid-template-columns: 1fr; } }
+@media (max-width: 760px) {
+  .chart, .drawing { overflow-x: auto; }
+  .chart svg { min-width: 760px; }
+  .drawing svg { min-width: 680px; }
+}
+
+/* diffuser design game */
+.back { color: var(--fix); font-size: 15px; text-decoration: underline; text-underline-offset: 3px; }
+.g-hero { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 24px; align-items: end; margin-bottom: 22px; }
+.g-title { max-width: none; }
+.g-hero .sub { margin-bottom: 0; }
+.g-h { font-size: 20px; margin-bottom: 10px; }
+.g-goals ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.g-goals li { display: grid; grid-template-columns: 22px 1fr; gap: 8px; align-items: start; color: var(--ink2); }
+.g-star-sm { width: 18px; height: 18px; margin-top: 2px; background: var(--rule2);
+  clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
+
+.g-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 20px; align-items: start; }
+.g-side { position: sticky; top: 16px; }
+.g-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 22px; }
+.g-step { display: flex; align-items: center; gap: 10px; font-size: 18px; margin-bottom: 10px; }
+.g-step .n { width: 26px; height: 26px; border-radius: 50%; background: var(--ink); color: #fff; display: grid; place-items: center; font-size: 14px; flex: none; }
+.x-label { display: block; color: var(--ink2); font-size: 15px; margin-bottom: 8px; }
+.x-note { color: var(--ink3); font-size: 14px; margin: 6px 0 0; }
+
+.g-choices { display: grid; gap: 6px; }
+.g-choice { display: grid; grid-template-columns: 18px 1fr; gap: 10px; align-items: start; border: 1px solid var(--rule2); border-radius: 6px; padding: 8px 12px; cursor: pointer; background: var(--card); }
+.g-choice input { accent-color: var(--fix); margin: 4px 0 0; }
+.g-choice strong { display: block; font-weight: 600; }
+.g-choice span span { color: var(--ink2); font-size: 14.5px; }
+.g-choice:has(input:checked) { border-color: var(--fix); background: var(--fix-wash); }
+
+.x-range { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: baseline; margin-top: 6px; }
+.x-range label { color: var(--ink2); font-size: 15px; }
+.x-range output { font-weight: 600; font-size: 17px; }
+.x-range input[type="range"] { grid-column: 1 / -1; width: 100%; margin: 4px 0 0; accent-color: var(--fix); }
+
+.g-seg { display: flex; border: 1px solid var(--rule2); border-radius: 6px; overflow: hidden; width: max-content; max-width: 100%; }
+.g-seg label { position: relative; cursor: pointer; }
+.g-seg input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.g-seg span { display: block; padding: 6px 16px; border-left: 1px solid var(--rule2); color: var(--ink2); }
+.g-seg label:first-child span { border-left: 0; }
+.g-seg input:checked + span { background: var(--fix); color: #fff; }
+.g-seg input:focus-visible + span { outline: 2px solid var(--fix); outline-offset: -3px; }
+
+.g-run { display: block; width: 100%; margin-top: 24px; font: inherit; font-size: 19px; font-weight: 600; color: #fff; background: var(--fix);
+  border: 0; border-radius: 6px; padding: 12px 18px; cursor: pointer; }
+.g-run:hover { background: #184d7d; }
+.g-run[disabled] { background: var(--ink3); cursor: progress; }
+.g-presets { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--rule); }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.presets button { font: inherit; font-size: 14px; cursor: pointer; color: var(--ink2); background: var(--card); border: 1px solid var(--rule2); border-radius: 999px; padding: 3px 11px; }
+.presets button:hover { border-color: var(--ink3); color: var(--ink); }
+
+.g-figure { margin: 0; }
+#drawing svg, .g-flow svg { display: block; width: 100%; height: auto; }
+.x-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; margin-top: 10px; font-size: 14px; color: var(--ink2); }
+.x-legend .sw { display: inline-block; width: 22px; height: 0; vertical-align: middle; margin-right: 6px; }
+.sw-new { border-top: 2px solid var(--fix); }
+.sw-today { border-top: 2px dashed var(--problem); }
+.g-facts { margin: 10px 0 0; color: var(--ink2); }
+
+/* results */
+.g-results { margin-top: 32px; display: grid; gap: 20px; scroll-margin-top: 12px; }
+.g-results:focus { outline: none; }
+.g-stale { display: flex; gap: 14px; align-items: center; justify-content: space-between; flex-wrap: wrap; background: #FFF7E0; border: 1px solid #E5C76B; border-radius: 6px; padding: 10px 16px; }
+.g-results:not(.is-stale) .g-stale { display: none; }
+.g-results.is-stale .g-dim { opacity: 0.45; }
+.g-score { display: grid; grid-template-columns: auto 1fr; gap: 24px; align-items: center; }
+.g-stars { display: flex; gap: 8px; }
+.g-star { width: 54px; height: 54px; background: var(--rule2);
+  clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
+.g-star.on { background: #D99A00; }
+.g-score h2 { font-family: var(--serif); font-size: 30px; line-height: 1.15; margin-bottom: 6px; }
+.g-score p { font-family: var(--serif); color: var(--ink2); font-size: 17px; margin: 0; max-width: 70ch; }
+.g-res-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.g-res-grid h3 { font-size: 19px; }
+.g-flow { margin: 0; }
+.g-flow figcaption { font-family: var(--serif); color: var(--ink2); margin-top: 8px; }
+.g-goal { display: grid; grid-template-columns: 22px 1fr; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--rule); }
+.g-goal:last-child { border-bottom: 0; }
+.g-goal svg { margin-top: 3px; }
+.g-goal strong { display: block; font-weight: 600; }
+.g-goal span { font-family: var(--serif); color: var(--ink2); }
+.g-rank { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.g-rank li { display: grid; grid-template-columns: minmax(0, 11fr) minmax(0, 8fr) auto; gap: 10px; align-items: center; font-size: 15px; }
+.g-rank .bar { height: 10px; border-radius: 0 4px 4px 0; background: var(--mark); }
+.g-rank .mine { font-weight: 600; }
+.g-rank .mine .bar { background: var(--fix); }
+.g-rank .today .bar { background: var(--problem); }
+.g-rank .v { white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
+.g-rank-note { font-family: var(--serif); color: var(--ink2); margin: 12px 0 0; }
+.g-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.g-btn { font: inherit; font-size: 16px; font-weight: 500; cursor: pointer; border-radius: 6px; padding: 8px 16px; border: 1px solid var(--fix); background: var(--card); color: var(--fix); }
+.g-btn.primary { background: var(--fix); color: #fff; }
+.g-how { font-family: var(--serif); color: var(--ink2); font-size: 15.5px; margin: 0; max-width: 90ch; }
+#cfd-supply { font: inherit; font-size: 17px; width: 16ch; padding: 4px 8px; border: 1px solid var(--rule2); border-radius: 4px; margin-bottom: 10px; }
+.x-serif { font-family: var(--serif); color: var(--ink2); }
+.x-results td { font-weight: 600; white-space: nowrap; }
+.x-results td.n { white-space: normal; }
+.x-results td.n { font-weight: 400; color: var(--ink2); font-family: var(--serif); padding-left: 12px; }
+
+.x-footer { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 28px; }
+.x-check { display: flex; gap: 8px; align-items: flex-start; color: var(--ink2); }
+.x-check svg { flex: none; margin-top: 2px; }
+
+@keyframes g-pop { 0% { transform: scale(0.3); opacity: 0; } 70% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); } }
+.g-stars.animate .g-star.on { animation: g-pop 420ms ease-out both; }
+.g-stars.animate .g-star.on:nth-child(2) { animation-delay: 160ms; }
+.g-stars.animate .g-star.on:nth-child(3) { animation-delay: 320ms; }
+
+@media (max-width: 980px) {
+  .g-hero, .g-grid, .g-res-grid, .x-footer { grid-template-columns: minmax(0, 1fr); }
+  .g-side { position: static; order: -1; }
+}
+@media (max-width: 640px) {
+  .g-score { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .g-star { width: 42px; height: 42px; }
+  .g-score h2 { font-size: 25px; }
+  table.kv.x-results tr { display: grid; grid-template-columns: 1fr auto; gap: 0 10px; border-bottom: 1px solid var(--rule); padding: 6px 0; }
+  table.kv.x-results th, table.kv.x-results td { border-bottom: 0; padding: 0; width: auto; }
+  table.kv.x-results td.n { grid-column: 1 / -1; padding: 2px 0 0; }
+}
+.g-final-inputs { display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: flex-start; margin: 12px 0 8px; }
+.g-final-inputs fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.g-final .g-seg span { padding: 6px 12px; font-size: 15px; }
+.g-small { font-size: 15px; margin-top: 10px; }
+.g-final-score { display: grid; grid-template-columns: auto 1fr; gap: 18px; align-items: center; background: var(--fix-wash); border-radius: 6px; padding: 14px 16px; margin-top: 6px; }
+.g-final-score strong { display: block; font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+.g-final-score span { display: block; font-family: var(--serif); color: var(--ink2); }
+.g-star-md { width: 38px; height: 38px; }
+@media (max-width: 640px) { .g-final-score { grid-template-columns: minmax(0, 1fr); } .g-final .g-seg { flex-wrap: wrap; width: auto; } }
+
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="topbar">
+    <div class="project">MELprop student research group, Hydrogen Section, Warsaw University of Technology</div>
+    <a class="back" href="index.html">Back to the design review</a>
+  </header>
+
+  <div class="g-hero">
+    <div>
+      <h1 class="g-title">Fix the stalled diffuser</h1>
+      <p class="sub">At idle, today's inlet diffuser stalls on one wall and needs +24.0 kPa of supply pressure in Ansys Fluent. Design a better one in four steps and run the test. Then simulate it in Ansys Fluent: the real result decides whether you win.</p>
+    </div>
+    <div class="card g-goals">
+      <h2 class="g-h">Earn three stars</h2>
+      <ul>
+        <li><span class="g-star-sm" aria-hidden="true"></span>Keep the air on both walls: 8° or less per channel</li>
+        <li><span class="g-star-sm" aria-hidden="true"></span>Need at least 3 kPa less supply pressure than today</li>
+        <li><span class="g-star-sm" aria-hidden="true"></span>Fit today's space on the test stand: no longer, no wider</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="g-grid">
+    <form class="card g-build" id="build" aria-label="Build your diffuser">
+      <ol class="g-steps">
+        <li>
+          <h3 class="g-step"><span class="n">1</span>Choose the entry</h3>
+          <div class="g-choices" role="radiogroup" aria-label="Entry from the 6 mm bore">
+            <label class="g-choice"><input type="radio" name="entry" value="step"><span><strong>Sudden step</strong><span>Today's Ø6 mm bore jumps straight into the square.</span></span></label>
+            <label class="g-choice"><input type="radio" name="entry" value="smooth"><span><strong>Smooth blend</strong><span>The bore widens gradually into the square.</span></span></label>
+            <label class="g-choice"><input type="radio" name="entry" value="transition"><span><strong>Round-to-square</strong><span>A 5 mm transition with the same area, then the taper starts.</span></span></label>
+          </div>
+        </li>
+        <li>
+          <h3 class="g-step"><span class="n">2</span>Set the taper length</h3>
+          <div class="x-range">
+            <label for="taper">Taper length</label><output for="taper" id="taper-out"></output>
+            <input type="range" id="taper" min="40" max="160" step="1">
+          </div>
+          <p class="x-note">Today: 69 mm. A longer taper opens more gently, but needs more room.</p>
+        </li>
+        <li>
+          <h3 class="g-step"><span class="n">3</span>Shape the walls</h3>
+          <div class="x-range">
+            <label for="start">Square at the start of the taper</label><output for="start" id="start-out"></output>
+            <input type="range" id="start" min="5.3" max="9" step="0.1">
+          </div>
+          <div class="x-range">
+            <label for="exit_width">Exit width (height stays 9.4 mm)</label><output for="exit_width" id="exit_width-out"></output>
+            <input type="range" id="exit_width" min="15" max="40" step="0.5">
+          </div>
+          <p class="x-note">Today: a 7 mm square opening to 27 mm wide.</p>
+        </li>
+        <li>
+          <h3 class="g-step"><span class="n">4</span>Add splitter vanes</h3>
+          <div class="g-seg" role="radiogroup" aria-label="Number of splitter vanes">
+            <label><input type="radio" name="vanes" value="0"><span>None</span></label>
+            <label><input type="radio" name="vanes" value="1"><span>1</span></label>
+            <label><input type="radio" name="vanes" value="2"><span>2</span></label>
+            <label><input type="radio" name="vanes" value="3"><span>3</span></label>
+            <label><input type="radio" name="vanes" value="4"><span>4</span></label>
+          </div>
+          <p class="x-note">Thin vanes split the width into channels that each open more gently.</p>
+        </li>
+      </ol>
+      <button type="submit" class="g-run" id="run">Run the test</button>
+      <div class="g-presets">
+        <span class="x-label" id="preset-label">Or load a design from the review</span>
+        <div class="presets" role="group" aria-labelledby="preset-label" id="presets"></div>
+      </div>
+    </form>
+
+    <div class="g-side">
+      <figure class="card g-figure">
+        <h2 class="g-h">Your design</h2>
+        <div id="drawing"></div>
+        <figcaption class="x-legend">
+          <span><i class="sw sw-new"></i>Your design</span>
+          <span><i class="sw sw-today"></i>Today's part</span>
+          <span class="muted">Top view, to scale. Air flows left to right.</span>
+        </figcaption>
+        <p class="g-facts" id="facts"></p>
+      </figure>
+    </div>
+  </div>
+
+  <section id="results" class="g-results" hidden tabindex="-1" aria-labelledby="score-h"></section>
+
+  <footer class="x-footer">
+    <div id="selfcheck" class="x-check"></div>
+    <div>Generated by <code>build_report.py</code> on 25 November 2026. The game runs in JavaScript, a copy of the Python model in <code>diffuser/</code>; Python written with Claude as AI coding assistant.</div>
+  </footer>
+</div>
+
+<script id="game-data" type="application/json">{"t0":300.0,"p_ref":101325.0,"mdot_g":7.4167,"base":{"bore_diameter":6.0,"entry":"step","entry_length":1.0,"start_width":7.0,"start_height":7.0,"taper_length":69.0,"exit_width":27.0,"exit_height":9.4,"exit_section_length":14.76,"vanes":0,"vane_start":15.0,"vane_end":62.0,"vane_thickness":0.5,"plates":5,"plate_thickness":0.4,"plates_start":1.25,"plates_end":11.01},"cfd":{"cp":0.28336599412563035,"supply_kPa":24.033,"model_supply_kPa":23.68040840130689},"cp_table":{"step":{"stall":0.28336599412563035,"drift":0.45,"attached":0.45},"smooth":{"stall":0.35,"drift":0.55,"attached":0.6}},"goals":{"attached_max":8.0,"drift_max":10.0,"pressure_saving_kPa":3.0,"today_length":84.76,"today_exit_width":27.0},"presets":[{"key":"today","label":"Today, as built","kind":"CFD result","cp":0.28336599412563035,"controls":{"entry":"step","start":7.0,"taper":69.0,"exit_width":27.0,"vanes":0,"mdot_g":7.4167}},{"key":"length","label":"Fix 1: longer taper","kind":"estimate","cp":0.45,"controls":{"entry":"step","start":7.0,"taper":127.0,"exit_width":27.0,"vanes":0,"mdot_g":7.4167}},{"key":"entry","label":"Fix 2: smooth entry","kind":"estimate","cp":0.35,"controls":{"entry":"smooth","start":7.0,"taper":69.0,"exit_width":27.0,"vanes":0,"mdot_g":7.4167}},{"key":"vanes","label":"Fix 3: two splitter vanes","kind":"estimate","cp":0.45,"controls":{"entry":"step","start":7.0,"taper":69.0,"exit_width":27.0,"vanes":2,"mdot_g":7.4167}},{"key":"length_entry","label":"Longer taper + smooth entry","kind":"estimate","cp":0.55,"controls":{"entry":"smooth","start":7.0,"taper":127.0,"exit_width":27.0,"vanes":0,"mdot_g":7.4167}},{"key":"all","label":"Longer + smooth + vanes","kind":"estimate","cp":0.6,"controls":{"entry":"smooth","start":7.0,"taper":127.0,"exit_width":27.0,"vanes":2,"mdot_g":7.4167}},{"key":"next","label":"Vanes + smooth entry, same envelope","kind":"next CFD run","cp":null,"controls":{"entry":"transition","start":5.3,"taper":65.0,"exit_width":27.0,"vanes":2,"mdot_g":7.4167}}],"cases":[{"controls":{"entry":"step","start":7.0,"taper":69.0,"exit_width":27.0,"vanes":0,"mdot_g":7.4167},"expected":{"band":"stall","cp":0.28336599412563035,"wall_angle_wide":16.49264162893706,"widest_channel_angle":16.49264162893706,"area_ratio_bore":8.976338790382897,"step_loss_coefficient":0.1789059708546607,"total_length":84.76,"supply_kPa":23.68040840130689,"bore_mach":0.6770236600710782,"step_loss_kPa":5.911757494819984,"choke_share":0.8992300739551714,"exit_velocity":24.806300226332823,"star_flow":false,"star_pressure":false,"star_fit":true,"stars":1}},{"controls":{"entry":"step","start":7.0,"taper":127.0,"exit_width":27.0,"vanes":0,"mdot_g":7.4167},"expected":{"band":"drift","cp":0.45,"wall_angle_wide":9.00437898408195,"widest_channel_angle":9.00437898408195,"area_ratio_bore":8.976338790382897,"step_loss_coefficient":0.1789059708546607,"total_length":142.76,"supply_kPa":19.69777108402505,"bore_mach":0.7261112757193076,"step_loss_kPa":6.407361562655207,"choke_share":0.9288220855846976,"exit_velocity":24.806300226332823,"star_flow":false,"star_pressure":true,"star_fit":false,"stars":1}},{"controls":{"entry":"smooth","start":7.0,"taper":69.0,"exit_width":27.0,"vanes":0,"mdot_g":7.4167},"expected":{"band":"stall","cp":0.35,"wall_angle_wide":16.49264162893706,"widest_channel_angle":16.49264162893706,"area_ratio_bore":8.976338790382897,"step_loss_coefficient":0.0,"total_length":84.76,"supply_kPa":22.123844357231313,"bore_mach":0.6947785121511467,"step_loss_kPa":0.0,"choke_share":0.9105684482247566,"exit_velocity":24.806300226332823,"star_flow":false,"star_pressure":false,"star_fit":true,"stars":1}},{"controls":{"entry":"step","start":7.0,"taper":69.0,"exit_width":27.0,"vanes":2,"mdot_g":7.4167},"expected":{"band":"attached","cp":0.45,"wall_angle_wide":16.49264162893706,"widest_channel_angle":5.531523668499006,"area_ratio_bore":8.976338790382897,"step_loss_coefficient":0.1789059708546607,"total_length":84.76,"supply_kPa":19.69777108402505,"bore_mach":0.7261112757193076,"step_loss_kPa":6.407361562655207,"choke_share":0.9288220855846976,"exit_velocity":24.806300226332823,"star_flow":true,"star_pressure":true,"star_fit":true,"stars":3}},{"controls":{"entry":"smooth","start":7.0,"taper":127.0,"exit_width":27.0,"vanes":0,"mdot_g":7.4167},"expected":{"band":"drift","cp":0.55,"wall_angle_wide":9.00437898408195,"widest_channel_angle":9.00437898408195,"area_ratio_bore":8.976338790382897,"step_loss_coefficient":0.0,"total_length":142.76,"supply_kPa":17.152141101849235,"bore_mach":0.765817206115559,"step_loss_kPa":0.0,"choke_share":0.9487789931128672,"exit_velocity":24.806300226332823,"star_flow":false,"star_pressure":true,"star_fit":false,"stars":1}},{"controls":{"entry":"smooth","start":7.0,"taper":127.0,"exit_width":27.0,"vanes":2,"mdot_g":7.4167},"expected":{"band":"attached","cp":0.6,"wall_angle_wide":9.00437898408195,"widest_channel_angle":3.0069621057026006,"area_ratio_bore":8.976338790382897,"step_loss_coefficient":0.0,"total_length":142.76,"supply_kPa":15.83251612670932,"bore_mach":0.7905873901515874,"step_loss_kPa":0.0,"choke_share":0.95946573773321,"exit_velocity":24.806300226332823,"star_flow":true,"star_pressure":true,"star_fit":false,"stars":2}},{"controls":{"entry":"transition","start":5.3,"taper":65.0,"exit_width":27.0,"vanes":2,"mdot_g":7.4167},"expected":{"band":"attached","cp":0.6,"wall_angle_wide":18.953231557537816,"widest_channel_angle":6.369424207981775,"area_ratio_bore":8.976338790382897,"step_loss_coefficient":0.0,"total_length":84.76,"supply_kPa":15.83251612670932,"bore_mach":0.7905873901515874,"step_loss_kPa":0.0,"choke_share":0.95946573773321,"exit_velocity":24.806300226332823,"star_flow":true,"star_pressure":true,"star_fit":true,"stars":3}},{"controls":{"entry":"step","start":6.0,"taper":100.0,"exit_width":32.0,"vanes":3,"mdot_g":7.4167},"expected":{"band":"attached","cp":0.45,"wall_angle_wide":14.81382425699046,"widest_channel_angle":3.7189939731580433,"area_ratio_bore":10.638623751564916,"step_loss_coefficient":0.04605394827318831,"total_length":115.76,"supply_kPa":19.69777108402505,"bore_mach":0.7261112757193076,"step_loss_kPa":1.6493820556378074,"choke_share":0.9288220855846976,"exit_velocity":20.936469464012717,"star_flow":true,"star_pressure":true,"star_fit":false,"stars":2}},{"controls":{"entry":"smooth","start":8.0,"taper":150.0,"exit_width":20.0,"vanes":1,"mdot_g":7.4167},"expected":{"band":"attached","cp":0.6,"wall_angle_wide":4.581220085277059,"widest_channel_angle":2.2906100426385296,"area_ratio_bore":6.649139844728072,"step_loss_coefficient":0.0,"total_length":165.76,"supply_kPa":15.83251612670932,"bore_mach":0.7905873901515874,"step_loss_kPa":0.0,"choke_share":0.95946573773321,"exit_velocity":33.46045846758024,"star_flow":true,"star_pressure":true,"star_fit":false,"stars":2}},{"controls":{"entry":"transition","start":5.3,"taper":40.0,"exit_width":40.0,"vanes":0,"mdot_g":7.4167},"expected":{"band":"stall","cp":0.35,"wall_angle_wide":46.897577667691486,"widest_channel_angle":46.897577667691486,"area_ratio_bore":13.298279689456145,"step_loss_coefficient":0.0,"total_length":59.76,"supply_kPa":22.123844357231313,"bore_mach":0.6947785121511467,"step_loss_kPa":0.0,"choke_share":0.9105684482247566,"exit_velocity":16.75356000146378,"star_flow":false,"star_pressure":false,"star_fit":false,"stars":0}},{"controls":{"entry":"step","start":7.0,"taper":69.0,"exit_width":27.0,"vanes":0,"mdot_g":12.0},"expected":{"band":"stall","cp":0.28336599412563035,"wall_angle_wide":16.49264162893706,"widest_channel_angle":16.49264162893706,"area_ratio_bore":8.976338790382897,"step_loss_coefficient":0.1789059708546607,"total_length":84.76,"supply_kPa":null,"bore_mach":null,"step_loss_kPa":null,"choke_share":null,"exit_velocity":40.069845070498125,"star_flow":false,"star_pressure":false,"star_fit":true,"stars":1}}]}</script>
+<script>
+// Model for the diffuser design game: a line-by-line copy of diffuser/game.py, diffuser/geometry.py
+// and diffuser/gasdynamics.py. pytest checks it against the Python model with Node.js, and the page
+// checks itself against reference cases computed in Python when it opens.
+const DiffuserModel = (function () {
+  "use strict";
+
+  const GAMMA = 1.4;
+  const R_AIR = 287.0;
+  const MM2 = 1e-6;
+  const ENTRY_LENGTH = { step: 1.0, smooth: 1.0, transition: 5.0 };
+  const deg = (rad) => (rad * 180) / Math.PI;
+
+  // ------------------------------------------------------------ gas dynamics (SI units)
+  const k = (m) => 1 + 0.5 * (GAMMA - 1) * m * m;
+  const staticToTotalPressure = (m) => Math.pow(k(m), -GAMMA / (GAMMA - 1));
+  const staticToTotalTemperature = (m) => 1 / k(m);
+  const massFlowFunction = (m) =>
+    Math.sqrt(GAMMA / R_AIR) * m * Math.pow(k(m), -(GAMMA + 1) / (2 * (GAMMA - 1)));
+
+  function bisect(f, lo, hi, tol = 1e-12, maxIter = 200) {
+    let fLo = f(lo);
+    if (fLo * f(hi) > 0) throw new Error("bisect: the root is not bracketed");
+    for (let i = 0; i < maxIter; i++) {
+      const mid = 0.5 * (lo + hi);
+      const fMid = f(mid);
+      if (fMid > 0 === fLo > 0) {
+        lo = mid;
+        fLo = fMid;
+      } else {
+        hi = mid;
+      }
+      if (hi - lo < tol) break;
+    }
+    return 0.5 * (lo + hi);
+  }
+
+  function stateFromTotalPressure(mach, p0, t0) {
+    const p = p0 * staticToTotalPressure(mach);
+    const t = t0 * staticToTotalTemperature(mach);
+    return { mach, p0, p, t, rho: p / (R_AIR * t), velocity: mach * Math.sqrt(GAMMA * R_AIR * t), q: p0 - p };
+  }
+
+  const chokedMassFlow = (area, p0, t0) => (area * p0) / Math.sqrt(t0) * massFlowFunction(1);
+
+  // Bore state that delivers the mass flow when the diffuser recovers Cp; null if the bore chokes.
+  function boreStateForRecovery(massFlow, boreArea, t0, exitPressure, cp) {
+    if (!(cp >= 0 && cp < 1)) return null;
+    const required = (m) => {
+      const pr = staticToTotalPressure(m);
+      return massFlowFunction(m) / (pr + cp * (1 - pr));
+    };
+    const target = (massFlow * Math.sqrt(t0)) / (boreArea * exitPressure);
+    if (target >= required(1)) return null;
+    const mach = bisect((m) => required(m) - target, 1e-9, 1);
+    const pr = staticToTotalPressure(mach);
+    return stateFromTotalPressure(mach, exitPressure / (pr + cp * (1 - pr)), t0);
+  }
+
+  // Cp implied by a supply total pressure, for example from a new CFD run; null if it chokes.
+  function recoveryForSupply(massFlow, boreArea, t0, exitPressure, supply) {
+    const target = (massFlow * Math.sqrt(t0)) / (boreArea * supply);
+    if (!(supply > 0) || target >= massFlowFunction(1)) return null;
+    const mach = bisect((m) => massFlowFunction(m) - target, 1e-9, 1);
+    const p1 = supply * staticToTotalPressure(mach);
+    return (exitPressure - p1) / (supply - p1);
+  }
+
+  function uniformStateFromStaticPressure(massFlow, area, p, t0) {
+    const target = (massFlow * Math.sqrt((R_AIR * t0) / GAMMA)) / (p * area);
+    const shape = (m) => m * Math.sqrt(k(m));
+    if (target >= shape(1)) return null;
+    const mach = bisect((m) => shape(m) - target, 0, 1);
+    return stateFromTotalPressure(mach, p / staticToTotalPressure(mach), t0);
+  }
+
+  // ------------------------------------------------------------ geometry (mm, degrees)
+  function geometry(base, c) {
+    const f0 = (base.vane_start - base.entry_length) / base.taper_length;
+    const f1 = (base.vane_end - base.entry_length) / base.taper_length;
+    const xs = ENTRY_LENGTH[c.entry];
+    const g = Object.assign({}, base, {
+      entry: c.entry, entry_length: xs, start_width: c.start, start_height: c.start,
+      taper_length: c.taper, exit_width: c.exit_width, vanes: c.vanes,
+      vane_start: xs + f0 * c.taper, vane_end: xs + f1 * c.taper,
+    });
+    g.taper_start = xs;
+    g.taper_end = xs + g.taper_length;
+    g.total_length = g.taper_end + g.exit_section_length;
+    g.bore_area = (Math.PI * g.bore_diameter ** 2) / 4;
+    g.start_area = g.start_width * g.start_height;
+    g.exit_area = g.exit_width * g.exit_height;
+    g.area_ratio_bore = g.exit_area / g.bore_area;
+    g.step_loss_coefficient = g.entry === "step" ? (1 - g.bore_area / g.start_area) ** 2 : 0;
+    g.tan_half_angle = (g.exit_width - g.start_width) / (2 * g.taper_length);
+    g.wall_angle_wide = 2 * deg(Math.atan(g.tan_half_angle));
+    g.wall_angle_thin = 2 * deg(Math.atan((g.exit_height - g.start_height) / (2 * g.taper_length)));
+    g.virtual_apex = g.taper_start - g.start_width / (2 * g.tan_half_angle);
+    const n = g.vanes + 1;
+    g.ray_angles = [];
+    for (let i = 0; i <= n; i++) g.ray_angles.push(deg(Math.atan((-1 + (2 * i) / n) * g.tan_half_angle)));
+    g.vane_angles = g.ray_angles.slice(1, -1);
+    g.channel_angles = g.ray_angles.slice(1).map((b, i) => b - g.ray_angles[i]);
+    g.widest_channel_angle = Math.max(...g.channel_angles);
+    const r1 = Math.sqrt(g.start_area / Math.PI);
+    const r2 = Math.sqrt(g.exit_area / Math.PI);
+    g.equivalent_cone_angle = 2 * deg(Math.atan((r2 - r1) / g.taper_length));
+    return g;
+  }
+
+  // Upper wall of the wide plane as [x, half-width] points, with the step as a vertical edge.
+  function outline(g) {
+    const xs = g.taper_start;
+    const pts = [];
+    if (g.entry === "step") {
+      pts.push([0, g.bore_diameter / 2], [xs, g.bore_diameter / 2], [xs, g.start_width / 2]);
+    } else {
+      for (let i = 0; i <= 24; i++) {
+        const t = i / 24;
+        const blend = t * t * (3 - 2 * t);
+        pts.push([t * xs, (g.bore_diameter + (g.start_width - g.bore_diameter) * blend) / 2]);
+      }
+    }
+    pts.push([g.taper_end, g.exit_width / 2], [g.total_length, g.exit_width / 2]);
+    return pts;
+  }
+
+  function vaneLines(g) {
+    return g.vane_angles.map((a) => {
+      const s = Math.tan((a * Math.PI) / 180);
+      return [[g.vane_start, (g.vane_start - g.virtual_apex) * s], [g.vane_end, (g.vane_end - g.virtual_apex) * s]];
+    });
+  }
+
+  // ------------------------------------------------------------ the game (diffuser/game.py)
+  function flowBand(g, goals) {
+    const a = g.widest_channel_angle;
+    return a <= goals.attached_max ? "attached" : a <= goals.drift_max ? "drift" : "stall";
+  }
+
+  function evaluate(data, c) {
+    const g = geometry(data.base, c);
+    const band = flowBand(g, data.goals);
+    const cp = data.cp_table[g.entry === "step" ? "step" : "smooth"][band];
+    const massFlow = c.mdot_g / 1000;
+    const out = {
+      band, cp,
+      wall_angle_wide: g.wall_angle_wide,
+      widest_channel_angle: g.widest_channel_angle,
+      area_ratio_bore: g.area_ratio_bore,
+      step_loss_coefficient: g.step_loss_coefficient,
+      total_length: g.total_length,
+      supply_kPa: null, bore_mach: null, step_loss_kPa: null, choke_share: null, exit_velocity: null,
+    };
+    const bore = boreStateForRecovery(massFlow, g.bore_area * MM2, data.t0, data.p_ref, cp);
+    if (bore) {
+      out.supply_kPa = (bore.p0 - data.p_ref) / 1000;
+      out.bore_mach = bore.mach;
+      out.step_loss_kPa = (g.step_loss_coefficient * bore.q) / 1000;
+      out.choke_share = massFlow / chokedMassFlow(g.bore_area * MM2, bore.p0, data.t0);
+    }
+    const exit = uniformStateFromStaticPressure(massFlow, g.exit_area * MM2, data.p_ref, data.t0);
+    out.exit_velocity = exit ? exit.velocity : null;
+    const goals = data.goals;
+    out.star_flow = band === "attached";
+    out.star_pressure = out.supply_kPa !== null && out.supply_kPa <= data.cfd.supply_kPa - goals.pressure_saving_kPa;
+    out.star_fit = g.total_length <= goals.today_length + 0.05 && g.exit_width <= goals.today_exit_width + 1e-9;
+    out.stars = Number(out.star_flow) + Number(out.star_pressure) + Number(out.star_fit);
+    return { g, out };
+  }
+
+  // Cp a CFD supply pressure (kPa above the stand) implies for this design.
+  function cpFromSupply(data, c, supplyKPa) {
+    const g = geometry(data.base, c);
+    return recoveryForSupply(c.mdot_g / 1000, g.bore_area * MM2, data.t0, data.p_ref, data.p_ref + supplyKPa * 1000);
+  }
+
+  return { evaluate, cpFromSupply, geometry, outline, vaneLines };
+})();
+
+if (typeof module !== "undefined") module.exports = DiffuserModel;
+
+</script>
+<script>
+// Diffuser design game: build a design, run the test, see the score.
+(function () {
+  "use strict";
+  const M = DiffuserModel;
+  const data = JSON.parse(document.getElementById("game-data").textContent);
+  const byId = (id) => document.getElementById(id);
+  const today = data.presets.find((p) => p.key === "today");
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const fmt = (v, d) => {
+    const s = v.toFixed(d);
+    return /^-0(\.0+)?$/.test(s) ? s.slice(1) : s;
+  };
+  const kpa = (v) => (v >= 0 ? "+" : "−") + fmt(Math.abs(v), 1) + " kPa";
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  const ICON = {
+    ok: '<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="7.5" fill="var(--ok)"/><path d="M5 9.3 L7.8 12 L13 6.4" stroke="#fff" stroke-width="2" fill="none"/></svg>',
+    no: '<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="7.5" fill="var(--problem)"/><path d="M6 6 L12 12 M12 6 L6 12" stroke="#fff" stroke-width="2"/></svg>',
+  };
+  const RANGES = { taper: { d: 0, unit: " mm" }, start: { d: 1, unit: " mm" }, exit_width: { d: 1, unit: " mm" } };
+
+  let state = Object.assign({}, today.controls);
+  let tested = null; // the design the results belong to
+
+  // ---------------------------------------------------------------- controls
+  function syncControls() {
+    Object.keys(RANGES).forEach((k) => { byId(k).value = state[k]; });
+    document.querySelectorAll('input[name="entry"]').forEach((r) => { r.checked = r.value === state.entry; });
+    document.querySelectorAll('input[name="vanes"]').forEach((r) => { r.checked = Number(r.value) === state.vanes; });
+  }
+  Object.keys(RANGES).forEach((k) => {
+    byId(k).addEventListener("input", (e) => { state[k] = parseFloat(e.target.value); changed(); });
+  });
+  document.querySelectorAll('input[name="entry"]').forEach((r) => r.addEventListener("change", () => { state.entry = r.value; changed(); }));
+  document.querySelectorAll('input[name="vanes"]').forEach((r) => r.addEventListener("change", () => { state.vanes = Number(r.value); changed(); }));
+
+  const presetBox = byId("presets");
+  data.presets.forEach((p) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = p.label;
+    b.addEventListener("click", () => { state = Object.assign({}, p.controls); syncControls(); changed(); });
+    presetBox.appendChild(b);
+  });
+
+  const same = (a, b) => a && b && ["entry", "start", "taper", "exit_width", "vanes"].every((k) => a[k] === b[k]);
+
+  function changed() {
+    renderBuild();
+    const res = byId("results");
+    if (tested) res.classList.toggle("is-stale", !same(state, tested));
+  }
+
+  // ---------------------------------------------------------------- drawings
+  const X0 = -4, X1 = 182, Y = 23;
+  const pathOf = (pts, sign) => pts.map((p, i) => (i ? "L" : "M") + fmt(p[0], 2) + " " + fmt(sign * p[1], 2)).join(" ");
+  const polygonOf = (pts) => pts.map((p) => fmt(p[0], 2) + "," + fmt(-p[1], 2))
+    .concat(pts.slice().reverse().map((p) => fmt(p[0], 2) + "," + fmt(p[1], 2))).join(" ");
+
+  function passageSvg(g, opts) {
+    const gToday = M.geometry(data.base, today.controls);
+    const pts = M.outline(g), ptsToday = M.outline(gToday);
+    const vanes = M.vaneLines(g).map((l) =>
+      `<line x1="${fmt(l[0][0], 2)}" y1="${fmt(-l[0][1], 2)}" x2="${fmt(l[1][0], 2)}" y2="${fmt(-l[1][1], 2)}" stroke="var(--fix)" stroke-width="0.6" stroke-linecap="round"/>`).join("");
+    const xs = g.taper_start, xe = g.taper_end, yDim = Y - 1.5;
+    const dims = opts.dims
+      ? `<line x1="${fmt(xs, 2)}" y1="${yDim}" x2="${fmt(xe, 2)}" y2="${yDim}" stroke="var(--ink3)" stroke-width="0.25"/>` +
+        `<line x1="${fmt(xs, 2)}" y1="${yDim - 1.2}" x2="${fmt(xs, 2)}" y2="${yDim + 1.2}" stroke="var(--ink3)" stroke-width="0.25"/>` +
+        `<line x1="${fmt(xe, 2)}" y1="${yDim - 1.2}" x2="${fmt(xe, 2)}" y2="${yDim + 1.2}" stroke="var(--ink3)" stroke-width="0.25"/>` +
+        `<text x="${fmt((xs + xe) / 2, 2)}" y="${yDim - 0.9}" text-anchor="middle" font-size="2.9" fill="var(--ink2)">taper ${fmt(g.taper_length, 0)} mm</text>` +
+        `<text x="${fmt(g.total_length + 1.5, 2)}" y="-1" font-size="2.9" fill="var(--ink2)">${fmt(g.exit_width, 1)} mm</text>` +
+        `<text x="0" y="${fmt(-Math.max(g.start_width, gToday.start_width) / 2 - 3, 2)}" font-size="2.9" fill="var(--ink2)">Ø${fmt(g.bore_diameter, 0)} bore</text>`
+      : "";
+    const todayPaths = opts.today
+      ? `<path d="${pathOf(ptsToday, -1)}" fill="none" stroke="var(--problem)" stroke-width="0.45" stroke-dasharray="1.6 1"/>` +
+        `<path d="${pathOf(ptsToday, 1)}" fill="none" stroke="var(--problem)" stroke-width="0.45" stroke-dasharray="1.6 1"/>`
+      : "";
+    const vb = opts.fit
+      ? (() => { const h = Math.max(g.exit_width, g.start_width) / 2 + 2.5; const w = g.total_length + 9; return `-5 ${fmt(-h, 2)} ${fmt(w, 2)} ${fmt(2 * h, 2)}`; })()
+      : `${X0} ${-Y} ${X1 - X0} ${2 * Y}`;
+    return `<svg viewBox="${vb}" role="img" aria-label="${esc(opts.label)}">` +
+      `<defs><marker id="${opts.id}-f" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="3.2" markerHeight="3.2" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill="var(--ink)"/></marker>` +
+      `<marker id="${opts.id}-r" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="3.2" markerHeight="3.2" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill="var(--problem)"/></marker></defs>` +
+      `<line x1="${X0}" y1="0" x2="${fmt(Math.max(g.total_length, gToday.total_length), 2)}" y2="0" stroke="var(--rule2)" stroke-width="0.2" stroke-dasharray="2 1.2"/>` +
+      `<polygon points="${polygonOf(pts)}" fill="var(--fix-wash)"/>` + vanes +
+      `<path d="${pathOf(pts, -1)}" fill="none" stroke="var(--fix)" stroke-width="0.6" stroke-linejoin="round"/>` +
+      `<path d="${pathOf(pts, 1)}" fill="none" stroke="var(--fix)" stroke-width="0.6" stroke-linejoin="round"/>` +
+      todayPaths + dims + (opts.extra || "") + `</svg>`;
+  }
+
+  // Sketch of what the air does in each channel: even, drifting, or stalled with reverse flow.
+  function flowArrows(g, band, id) {
+    const tan = (deg) => Math.tan((deg * Math.PI) / 180);
+    const rays = g.ray_angles;
+    const out = [];
+    const L = g.taper_length;
+    const arrow = (x, y, len) => {
+      if (Math.abs(len) < 0.6) return;
+      const fwd = len > 0;
+      const x1 = x - len / 2, x2 = x + len / 2;
+      out.push(`<line x1="${fmt(x1, 2)}" y1="${fmt(y, 2)}" x2="${fmt(x2, 2)}" y2="${fmt(y, 2)}" stroke="${fwd ? "var(--ink)" : "var(--problem)"}" stroke-width="0.45" marker-end="url(#${id}-${fwd ? "f" : "r"})"/>`);
+    };
+    const profile = (frac) => (band === "attached" ? 1 : band === "drift" ? 1 - 0.6 * frac : frac < 0.5 ? 1.2 : -0.5);
+    const stations = [0.2, 0.45, 0.7, 0.93].map((f) => g.taper_start + f * L);
+    const step = (stations[1] - stations[0]);
+    stations.forEach((x) => {
+      for (let c = 0; c < rays.length - 1; c++) {
+        // rays from the virtual apex: upper wall first (SVG y points down)
+        const yTop = -(x - g.virtual_apex) * tan(rays[rays.length - 1 - c]);
+        const yBot = -(x - g.virtual_apex) * tan(rays[rays.length - 2 - c]);
+        const width = yBot - yTop;
+        const rows = Math.max(2, Math.min(4, Math.round(width / 4)));
+        for (let r = 0; r < rows; r++) {
+          const frac = (r + 0.5) / rows;
+          arrow(x, yTop + frac * width, profile(frac) * Math.min(step * 0.55, 8));
+        }
+      }
+    });
+    // exit section: one channel across the full width
+    const xExit = g.taper_end + g.exit_section_length / 2;
+    for (let r = 0; r < 5; r++) {
+      const frac = (r + 0.5) / 5;
+      arrow(xExit, -g.exit_width / 2 + frac * g.exit_width, profile(frac) * Math.min(g.exit_section_length * 0.6, 8));
+    }
+    arrow(-1.5, 0, 5);
+    return out.join("");
+  }
+
+  function renderBuild() {
+    const { g, out } = M.evaluate(data, state);
+    Object.keys(RANGES).forEach((k) => { byId(k + "-out").textContent = fmt(state[k], RANGES[k].d) + RANGES[k].unit; });
+    byId("drawing").innerHTML = passageSvg(g, {
+      id: "b", dims: true, today: true,
+      label: `Top view of your design over today's part: taper ${fmt(g.taper_length, 0)} mm, exit ${fmt(g.exit_width, 1)} mm wide, ${g.vanes} splitter vanes`,
+    });
+    const dl = out.total_length - data.goals.today_length;
+    byId("facts").textContent =
+      `${fmt(out.total_length, 1)} mm long (${Math.abs(dl) < 0.05 ? "same as today" : `${fmt(Math.abs(dl), 0)} mm ${dl > 0 ? "longer" : "shorter"} than today`}), ` +
+      `${fmt(g.exit_width, 1)} mm wide at the exit, ${g.vanes ? `${g.vanes} vane${g.vanes > 1 ? "s" : ""}` : "no vanes"}. Run the test to see how it performs.`;
+  }
+
+  // ---------------------------------------------------------------- results
+  const BAND_TEXT = {
+    attached: "The air stays on both walls and spreads over the full width.",
+    drift: "The air mostly follows the walls, but at 8–10° it is right at the limit and may drift to one side.",
+    stall: "The walls open too fast: the air hugs one wall and the other side flows backwards, as in today's part.",
+  };
+  const HEADLINE = ["No stars yet", "One star: keep going", "Two stars: nearly there", "Three stars: worth a CFD run"];
+
+  function results() {
+    const { g, out } = M.evaluate(data, state);
+    const goals = data.goals;
+    const save = out.supply_kPa === null ? null : data.cfd.supply_kPa - out.supply_kPa;
+    const per = g.vanes ? ` per channel (${g.vanes + 1} channels, ${fmt(g.wall_angle_wide, 1)}° overall)` : "";
+    const dl = out.total_length - goals.today_length;
+
+    const goalRows = [
+      [out.star_flow, "Keep the air on both walls",
+        `${fmt(out.widest_channel_angle, 1)}°${per}. ${out.band === "attached" ? "Inside the 8° goal." : out.band === "drift" ? "Above 8°: it may drift to one side." : "Far above 8°: it stalls."}`],
+      [out.star_pressure, "Save at least 3 kPa of supply pressure",
+        save === null ? "The Ø6 mm bore chokes: this flow can't pass."
+          : `Needs ${kpa(out.supply_kPa)}: ${fmt(Math.abs(save), 1)} kPa ${save >= 0 ? "less" : "more"} than today's ${kpa(data.cfd.supply_kPa)} in Fluent.`],
+      [out.star_fit, "Fit today's space on the stand",
+        `${fmt(out.total_length, 1)} mm long${Math.abs(dl) < 0.05 ? ", same as today" : `, ${fmt(Math.abs(dl), 0)} mm ${dl > 0 ? "longer" : "shorter"} than today`}; ` +
+        `${fmt(g.exit_width, 1)} mm wide at the exit${g.exit_width > goals.today_exit_width + 1e-9 ? ", wider than today's 27 mm" : ""}.`],
+    ];
+    const missed = goalRows.filter((r) => !r[0]).map((r) => r[1].charAt(0).toLowerCase() + r[1].slice(1));
+    const summary = out.stars === 3
+      ? `It keeps the air on both walls, needs ${fmt(save, 1)} kPa less than today and fits today's space. Simulate it in Fluent to confirm, then enter the result below.`
+      : `Still to do: ${missed.join("; ")}. Change your design and run the test again.`;
+
+    // ranking against the review's designs (only those the review gave a Cp)
+    const rank = data.presets.filter((p) => p.cp !== null).map((p) => ({
+      label: p.key === "today" ? p.label + " (Fluent)" : p.label + " (estimate)",
+      v: p.key === "today" ? data.cfd.supply_kPa : M.evaluate(data, p.controls).out.supply_kPa,
+      cls: p.key === "today" ? "today" : "",
+      same: same(p.controls, state),
+    }));
+    const twin = rank.find((r) => r.same);
+    if (out.supply_kPa !== null) {
+      const tw = !twin ? "" : twin.cls === "today" ? " (today's part in the 1D model)" : `: same as ${twin.label.replace(/ \(.*\)$/, "")}`;
+      rank.push({ label: "Your design" + tw, v: out.supply_kPa, cls: "mine" });
+    }
+    rank.sort((a, b) => a.v - b.v);
+    const vmax = Math.max(...rank.map((r) => r.v));
+    const beaten = out.supply_kPa === null ? 0 : rank.filter((r) => r.cls !== "mine" && r.v > out.supply_kPa + 1e-9).length;
+    const reviewCount = rank.filter((r) => r.cls !== "mine").length;
+    const rankList = rank.map((r) =>
+      `<li class="${r.cls}"><span>${esc(r.label)}</span><span class="bar" style="width:${fmt((r.v / vmax) * 100, 1)}%"></span><span class="v">${kpa(r.v)}</span></li>`).join("");
+
+    const cpSource = state.entry === today.controls.entry && out.band === "stall"
+      ? "today's Fluent result" : "the review's estimate for this kind of design";
+    const details = [
+      ["Pressure recovery Cp", fmt(out.cp, 2), `From ${cpSource}`],
+      ["Area ratio, exit to bore", fmt(out.area_ratio_bore, 2), `Ideal Cp ${fmt(1 - 1 / out.area_ratio_bore ** 2, 2)} with no losses`],
+      ["Entry-step loss", out.step_loss_coefficient > 0 && out.step_loss_kPa !== null ? `${fmt(out.step_loss_kPa, 1)} kPa` : "None", out.step_loss_coefficient > 0 ? `${fmt(out.step_loss_coefficient * 100, 0)} % of the bore's dynamic pressure` : "No sudden step"],
+      ["Bore flow", out.bore_mach === null ? "Chokes" : `Mach ${fmt(out.bore_mach, 2)}`, out.choke_share === null ? "" : `${fmt(out.choke_share * 100, 0)} % of the choking flow`],
+      ["Exit speed if even", out.exit_velocity === null ? "–" : `${fmt(out.exit_velocity, 1)} m/s`, "Mass flow over the exit area at 1 atm"],
+    ].map((r) => `<tr><th scope="row">${r[0]}</th><td>${r[1]}</td><td class="n">${r[2]}</td></tr>`).join("");
+
+    const stars = [0, 1, 2].map((i) => `<span class="g-star${i < out.stars ? " on" : ""}"></span>`).join("");
+    const err = data.cfd.model_supply_kPa / data.cfd.supply_kPa - 1;
+
+    const res = byId("results");
+    res.innerHTML =
+      `<div class="g-stale" id="stale"><span>You changed the design. Run the test again to score it.</span><button type="button" class="g-btn primary" id="rerun">Run the test</button></div>` +
+      `<div class="card g-score g-dim"><div class="g-stars${reduceMotion ? "" : " animate"}" role="img" aria-label="${out.stars} of 3 stars">${stars}</div>` +
+      `<div><h2 id="score-h">${HEADLINE[out.stars]}</h2><p>${esc(summary)}</p></div></div>` +
+      `<div class="g-res-grid g-dim">` +
+        `<figure class="card g-flow"><h3>What the air does</h3>${passageSvg(g, { id: "f", fit: true, dims: false, today: false, label: "Sketch of the flow in your design", extra: flowArrows(g, out.band, "f") })}` +
+        `<figcaption>${g.vanes && out.band !== "attached" ? `In each of the ${g.vanes + 1} channels, ${BAND_TEXT[out.band].charAt(0).toLowerCase()}${BAND_TEXT[out.band].slice(1)}` : BAND_TEXT[out.band]}${out.band === "stall" ? " Red arrows: air flowing backwards." : ""} A sketch from the wall angle, not a simulation.</figcaption></figure>` +
+        `<div class="card"><h3>Your three goals</h3>${goalRows.map((r) => `<div class="g-goal">${r[0] ? ICON.ok : ICON.no}<div><strong>${r[1]}</strong><span>${esc(r[2])}</span></div></div>`).join("")}</div>` +
+      `</div>` +
+      `<div class="g-res-grid g-dim">` +
+        `<div class="card"><h3>How you rank: supply pressure needed, lower is better</h3><ol class="g-rank">${rankList}</ol>` +
+        `<p class="g-rank-note">${out.supply_kPa === null ? "Your design chokes, so it can't be ranked." : `Your design beats ${beaten} of the ${reviewCount} designs in the review.`}</p></div>` +
+        `<div class="card"><h3>The numbers</h3><table class="kv x-results"><tbody>${details}</tbody></table></div>` +
+      `</div>` +
+      `<div class="card g-dim g-final"><h3>Final round: simulate it in Ansys Fluent</h3>` +
+        `<p class="x-serif">The stars above are the game's first estimate. To win, run this design in Fluent at idle and enter what you found: the real result decides the final score.</p>` +
+        `<div class="g-final-inputs"><div><label class="x-label" for="cfd-supply">Supply total pressure from Fluent, kPa above the stand</label>` +
+        `<input type="number" id="cfd-supply" inputmode="decimal" step="0.1" min="0" placeholder="e.g. 19.5"></div>` +
+        `<fieldset><legend class="x-label">In Fluent, the air…</legend><div class="g-seg">` +
+        `<label><input type="radio" name="cfd-flow" value="attached"><span>stayed on both walls</span></label>` +
+        `<label><input type="radio" name="cfd-flow" value="drift"><span>drifted to one side</span></label>` +
+        `<label><input type="radio" name="cfd-flow" value="stall"><span>stalled on one wall</span></label></div></fieldset></div>` +
+        `<div id="cfd-new" aria-live="polite"><p class="x-serif">Enter both results to get your final score.</p></div>` +
+        `<p class="x-serif g-small">For today's part the game's model needs ${kpa(data.cfd.model_supply_kPa)} against Fluent's ${kpa(data.cfd.supply_kPa)} (${fmt(Math.abs(err) * 100, 1)} % ${err < 0 ? "lower" : "higher"}): that is its known error.</p></div>` +
+      `<div class="g-actions"><button type="button" class="g-btn primary" id="again">Change my design</button><button type="button" class="g-btn" id="reset">Start again from today's part</button></div>` +
+      `<p class="g-how"><strong>How the test works.</strong> The game sorts your design by its entry (sudden step or smooth) and by how fast each channel opens: 8° or less, 8–10°, or more. ` +
+      `It gives that kind of design the Cp the review gave it: today's from Fluent, the rest estimated from straight-diffuser data (Reneau et al. 1967). ` +
+      `From that Cp, the same 1D compressible-flow model as the Python report works out the supply pressure at idle (${fmt(data.mdot_g, 2)} g/s). It is a quick first check; only CFD can confirm a design.</p>`;
+
+    tested = Object.assign({}, state);
+    res.hidden = false;
+    res.classList.remove("is-stale");
+    byId("rerun").addEventListener("click", run);
+    byId("again").addEventListener("click", () => {
+      byId("build").scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth" });
+      byId("taper").focus({ preventScroll: true });
+    });
+    byId("reset").addEventListener("click", () => {
+      state = Object.assign({}, today.controls);
+      syncControls();
+      changed();
+      byId("build").scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth" });
+    });
+    byId("cfd-supply").addEventListener("input", () => compare(out));
+    document.querySelectorAll('input[name="cfd-flow"]').forEach((r) => r.addEventListener("change", () => compare(out)));
+  }
+
+  // Final round: the Fluent result decides the score.
+  const FLOW_TEXT = { attached: "stayed on both walls", drift: "drifted to one side", stall: "stalled on one wall" };
+  function compare(out) {
+    const v = parseFloat(byId("cfd-supply").value);
+    const flowInput = document.querySelector('input[name="cfd-flow"]:checked');
+    const box = byId("cfd-new");
+    if (!(v > 0) || !flowInput) {
+      box.innerHTML = `<p class="x-serif">Enter both results to get your final score.</p>`;
+      return;
+    }
+    const cpCfd = M.cpFromSupply(data, tested, v);
+    if (cpCfd === null) {
+      box.innerHTML = `<p class="x-serif">At this pressure the bore would choke at idle. Check the value.</p>`;
+      return;
+    }
+    const flow = flowInput.value;
+    const starFlow = flow === "attached";
+    const starPressure = v <= data.cfd.supply_kPa - data.goals.pressure_saving_kPa;
+    const starFit = out.star_fit;
+    const n = Number(starFlow) + Number(starPressure) + Number(starFit);
+    const stars = [0, 1, 2].map((i) => `<span class="g-star g-star-md${i < n ? " on" : ""}"></span>`).join("");
+    const head = n === 3 ? "You win: three stars, confirmed by CFD" : `Fluent's verdict: ${["no stars", "one star", "two stars"][n]}`;
+    const save = data.cfd.supply_kPa - v;
+    const e = out.supply_kPa === null ? null : out.supply_kPa / v - 1;
+    const lines = [
+      `In Fluent the air ${FLOW_TEXT[flow]}${flow === out.band ? ", as the game expected." : `; the game expected it to have ${FLOW_TEXT[out.band]}.`}`,
+      `Fluent needs ${kpa(v)}: ${fmt(Math.abs(save), 1)} kPa ${save >= 0 ? "less" : "more"} than today. That means Cp ${fmt(cpCfd, 2)}, against the game's estimate of ${fmt(out.cp, 2)}` +
+        (e === null ? "." : `, so the game's pressure was ${fmt(Math.abs(e) * 100, 1)} % ${e < 0 ? "low" : "high"}.`),
+      starFit ? "It fits today's space on the stand." : "It needs more room than today's part.",
+    ];
+    box.innerHTML = `<div class="g-final-score"><div class="g-stars${reduceMotion ? "" : " animate"}" role="img" aria-label="${n} of 3 stars from CFD">${stars}</div>` +
+      `<div><strong>${head}</strong>${lines.map((l) => `<span>${esc(l)}</span>`).join("")}</div></div>`;
+  }
+
+  function run(e) {
+    if (e) e.preventDefault();
+    const btn = byId("run");
+    btn.disabled = true;
+    btn.textContent = "Testing at idle…";
+    setTimeout(() => {
+      results();
+      btn.disabled = false;
+      btn.textContent = "Run the test";
+      const res = byId("results");
+      res.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+      res.focus({ preventScroll: true });
+    }, reduceMotion ? 0 : 650);
+  }
+  byId("build").addEventListener("submit", run);
+
+  // ---------------------------------------------------------------- self-check against Python
+  function selfCheck() {
+    let failed = 0;
+    data.cases.forEach((c) => {
+      const out = M.evaluate(data, c.controls).out;
+      Object.keys(c.expected).forEach((k) => {
+        const a = out[k], b = c.expected[k];
+        if (typeof b === "number" && typeof a === "number") {
+          if (Math.abs(a - b) / Math.max(1, Math.abs(b)) > 1e-9) failed++;
+        } else if (a !== b) failed++;
+      });
+    });
+    byId("selfcheck").innerHTML = failed
+      ? ICON.no + `<span>Model check failed: the JavaScript differs from the Python model in ${failed} values. Rebuild the page with build_report.py.</span>`
+      : ICON.ok + `<span>Model check passed: the game's JavaScript matches the Python model on all ${data.cases.length} reference cases computed by build_report.py.</span>`;
+  }
+
+  syncControls();
+  renderBuild();
+  selfCheck();
+})();
+
+</script>
+</body>
+</html>
